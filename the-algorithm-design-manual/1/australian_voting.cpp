@@ -35,9 +35,87 @@
 #include <iomanip>
 #include <cmath>
 #include <sstream>
+#include <limits>
+#include <algorithm>
 
-std::vector<std::string> get_results(std::vector<std::string> candidate_names, std::vector<std::vector<int>> votes) {
-    return std::vector<std::string>{"AJ", "J J"};
+std::vector<std::string> get_results(std::vector<std::string> candidate_names, std::vector<std::vector<int>> all_ballots) {
+    std::vector<int> candidate_votes(candidate_names.size(), 0), eliminated, to_eliminate;
+    std::vector<std::string> winners;
+    int lowest_votes, highest_votes, lowest_candidate;
+
+    for (int i = 0; i < candidate_names.size(); i++) {
+        // count all i-th round votes
+        std::fill(candidate_votes.begin(), candidate_votes.end(), 0);
+        for (int j = 0; j < all_ballots.size(); j++) {
+            candidate_votes.at(all_ballots.at(j).at(0) - 1)++;    // ballot index != ballot array index
+        }
+
+        // check for winner w/ >50
+        winners.clear();
+        for (int k = 0; k < candidate_votes.size(); k++) {
+            if (candidate_votes.at(k) > all_ballots.size() / 2.0) {
+                winners.push_back(candidate_names.at(k));
+            }
+        }
+
+        // return if winner found
+        if (winners.size() > 0) break;
+
+        // get lowest votes in round
+        lowest_votes = std::numeric_limits<int>::max();
+        for (int j = 0; j < candidate_votes.size(); j++) {
+            // don't include eliminated candidates in check for lowest
+            if (find(eliminated.begin(), eliminated.end(), j) == eliminated.end() && candidate_votes.at(j) < lowest_votes) {
+                lowest_votes = candidate_votes.at(j);
+            }
+        }
+
+        // get candidates to eliminate
+        to_eliminate.clear();
+        for (int j = 0; j < candidate_votes.size(); j++) {
+            if (candidate_votes.at(j) == lowest_votes) {
+                to_eliminate.push_back(j);    // ballot index != ballot array index
+            }
+        }
+
+        // check if we're eliminating everyone that's left
+        // if we are; then they all win
+        // else continue
+        if (eliminated.size() + to_eliminate.size() == candidate_names.size()) {
+            for (int j = 0; j < to_eliminate.size(); j++) {
+                winners.push_back(candidate_names.at(to_eliminate.at(j)));
+            }
+        } else {
+            eliminated.insert(eliminated.end(), to_eliminate.begin(), to_eliminate.end());
+        }
+
+        // return if winner found
+        if (winners.size() > 0) break;
+
+        // rotate ballot for eliminated
+        // FIXME: rotate to next non-eliminated person
+        for (int j = 0; j < all_ballots.size(); j++) {
+            for (int k = 0; k < eliminated.size(); k++) {
+                if (all_ballots.at(j).at(0) - 1 == eliminated.at(k)) {
+                    while(std::find(eliminated.begin(), eliminated.end(), all_ballots.at(j).at(0) - 1) != eliminated.end()) {
+                        std::rotate(all_ballots.at(j).begin(), all_ballots.at(j).begin() + 1, all_ballots.at(j).end());
+                    }
+                }
+            }
+        }
+    }
+
+    // if nobody w/ >50, then find highest %
+    if (winners.size() == 0) {
+        highest_votes = std::numeric_limits<int>::lowest();
+        for (int j = 0; j < candidate_votes.size(); j++) {
+            if (candidate_votes.at(j) <= highest_votes) {
+                winners.push_back(candidate_names.at(j - 1));
+            }
+        }
+    }
+
+    return winners;
 }
 
 
@@ -50,34 +128,47 @@ int main() {
     std::vector<std::vector<std::string>> all_results{};
     std::istringstream iss;
     
-    std::cin >> scenarios;
+    // get # scenarios
     getline(std::cin, temp);
-    
+    iss.str(temp);
+    iss >> scenarios;
+    iss.clear();
+        
+    // consume blank line
+    getline(std::cin, temp);          
+
     for (int i = 0; i < scenarios; i++) {
-        // get candidate names
-        std::cin >> num_candidates;
+
+        
+        // get num candidates
         getline(std::cin, temp);
+        iss.str(temp);
+        iss >> num_candidates;
+        iss.clear();
+
+        // get candidate names
         while(candidate_names.size() < num_candidates) {
             getline(std::cin, temp);
             candidate_names.push_back(temp);
         }
-        std::cout << "Got candidates\n";
 
-        // get votes
-        while(getline(std::cin, temp) && temp != "") {
+        // get all ballots
+        while(getline(std::cin, temp) && !temp.empty()) {
+            // get votes from ballot
             iss.str(temp);
-            while(iss >> vote) {
+            while(iss >> vote) {                
                 ballot.push_back(vote);
-            }
+            } 
             votes.push_back(ballot);
 
             ballot.clear();
             iss.clear();
         }
+        
+        // get results
         all_results.push_back(get_results(candidate_names, votes));
         
         // clean up
-        // getline(std::cin, temp); // get blank line between scenarios
         candidate_names.clear();
         votes.clear();
     }
@@ -88,7 +179,9 @@ int main() {
         for (int j = 0; j < scenario_result.size(); j++) {
             std::cout << scenario_result.at(j) << '\n';
         }
-        std::cout << '\n';
+        if (i != all_results.size() - 1) {
+            std::cout << '\n';
+        }
     }
     return 0;
 }
